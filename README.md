@@ -65,7 +65,7 @@ Add to your MCP server config with `command: python`, `args: ["proton_email_serv
 ## Tests
 
 ```bash
-pip install -r requirements.txt pytest
+pip install -r requirements.txt pytest pytest-asyncio
 pytest
 ```
 
