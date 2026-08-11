@@ -200,20 +200,20 @@ async def search_emails(query: str = "", folder: str = "INBOX", max_results: str
         return f"❌ Error searching emails: {str(e)}"
 
 @mcp.tool()
-async def send_email(to_email: str = "", subject: str = "", body: str = "", cc: str = "", bcc: str = "") -> str:
-    """Send an email via Proton Bridge SMTP."""
+async def send_email(to_email: str = "", subject: str = "", body: str = "", cc: str = "", bcc: str = "", from_email: str = "") -> str:
+    """Send an email via Proton Bridge SMTP. Optionally send as an alias address you've added to your Proton account (from_email)."""
     logger.info(f"Sending email to {to_email}")
-    
+
     if not to_email.strip() or not subject.strip() or not body.strip():
         return "❌ Error: to_email, subject, and body are required"
-    
+
     if not PROTON_USERNAME or not PROTON_PASSWORD:
         return "❌ Error: Proton credentials not configured"
-    
+
     try:
         # Create message
         msg = MIMEMultipart()
-        msg['From'] = PROTON_USERNAME
+        msg['From'] = from_email.strip() if from_email.strip() else PROTON_USERNAME
         msg['To'] = to_email.strip()
         msg['Subject'] = subject.strip()
         
