@@ -7,7 +7,7 @@ Run: pytest tests/
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from email.mime.text import MIMEText
 
 # Inject required env vars before importing the module
