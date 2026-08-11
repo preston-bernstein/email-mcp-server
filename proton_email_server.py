@@ -4,6 +4,7 @@ Simple Proton Bridge Email MCP Server - Read and send emails via Proton Bridge
 """
 import asyncio
 import contextlib
+import ipaddress
 import os
 import re
 import ssl
@@ -95,6 +96,17 @@ def _most_recent(ids, limit):
 def _split_addrs(field: str):
     """Split a comma-separated address field into a list, or [] if empty."""
     return [addr.strip() for addr in field.split(",")] if field.strip() else []
+
+
+def _is_trusted_bridge_host(host: str) -> bool:
+    """True for loopback or private-network hosts — where running an
+    unverified-TLS connection to a self-signed Proton Bridge is acceptable."""
+    if host in ("127.0.0.1", "localhost", "::1"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
 
 
 def _format_message(message, index, label="Email", include_body=False, separator_width=60):
@@ -285,11 +297,12 @@ def _send_email_sync(to_email: str, subject: str, body: str, cc: str, bcc: str, 
 
         recipients = [to_email.strip()] + _split_addrs(cc) + _split_addrs(bcc)
 
-        # Proton Bridge issues a self-signed cert for its local SMTP listener,
-        # so certificate verification is disabled here — safe only because
-        # this is guarded to loopback connections.
-        assert PROTON_BRIDGE_HOST in ("127.0.0.1", "localhost", "::1"), \
-            "Refusing to disable TLS verification against a non-loopback SMTP host"
+        # Proton Bridge issues a self-signed cert per install, and this server
+        # is sometimes pointed at a Bridge running on another machine on the
+        # trusted home LAN (not just loopback) — so certificate verification
+        # is disabled here, guarded to loopback/private-network hosts only.
+        assert _is_trusted_bridge_host(PROTON_BRIDGE_HOST), \
+            "Refusing to disable TLS verification against an untrusted (non-private) SMTP host"
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
