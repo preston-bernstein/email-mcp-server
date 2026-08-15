@@ -1,3 +1,36 @@
+# Codebase Polish — 2026-08-15
+
+Second pass, ~4 days after the 2026-08-11 pass below. Repo state going in: clean working tree except an untracked `.claude/` (pre-existing local skill docs, out of scope for a code polish pass — left untouched, not committed), no divergence from `origin/main`.
+
+## Standards Brief sources
+- `deadcode` (the preferred tool per this run's brief) is incompatible with the local Python 3.14 interpreter (`AttributeError: module 'ast' has no attribute 'Str'` — the library still targets pre-3.12 `ast` APIs). Fell back to `vulture --min-confidence 60`, run in an isolated venv.
+- Google eng-practices code review culture (improve code health, not perfectionism) — same baseline as the prior pass.
+- Given the repo's size (695 LOC, one module + one test file), findings this pass were deliberately few: the 2026-08-11 pass already did the heavy lifting (session/logout leaks, Bcc disclosure, date-math bug, socket timeouts, thin-async wrappers, dead-code removal). This pass is a maintenance-scale check, not a rewrite.
+
+## Deterministic signal
+`vulture --min-confidence 60` on `proton_email_server.py` + `tests/test_proton_email_server.py`: 3 raw findings, all 3 the same mock-protocol false positives already documented in the 2026-08-11 pass (`side_effect`, `__enter__`, `__exit__` in the test file's mocks — consumed by `unittest.mock`/`with`, not dead). Zero new dead code in the application module itself — confirms the prior pass's cleanup held.
+
+## Applied
+- **[SHOULD, correctness]** `extract_email_body` (`proton_email_server.py`): a multipart/alternative message (the common case — most mail clients send matching `text/plain` + `text/html` parts of the *same* content) was concatenating both parts into one `body` string, so a tool response could return the plain-text version immediately followed by a dump of raw HTML markup for the same message. Now returns the `text/plain` part when present, and only falls back to `text/html` when no plain part exists. Verified by hand against three cases (plain+html, html-only, non-multipart) — all correct; no existing test exercised this path so nothing broke.
+- **[SHOULD, observability]** `imap_session`'s cleanup `finally` block silently swallowed any exception from `mail.logout()` (`except Exception: pass`) — a real logout failure (e.g. Bridge closing the connection oddly) left zero log trace. Now logs it at `debug` level, consistent with the existing pattern for other non-fatal, log-and-continue paths in this file (e.g. the TEXT→SUBJECT search fallback).
+- **[NIT]** Module-startup exception handler used `logger.error(f"Server error: {e}", exc_info=True)`; changed to `logger.exception("Server error")` for consistency with the rest of the file's `_log_failure` helper, which already uses `logger.exception`.
+- **[NIT]** `requirements.txt` was missing a trailing newline. Added.
+
+## Escalated
+None. Every finding this pass was an internal-implementation fix (no `@mcp.tool()` signature or behavior-contract change) and none touched code that looked deliberately-there-for-a-reason.
+
+## Regression safety net
+- `pytest tests/` (isolated venv, deps from `requirements.txt` + `pytest`/`pytest-asyncio`) — 12/12 passed, same as baseline before this pass's edits.
+- Clean-import sanity check (`python -c "import proton_email_server"` with dummy credentials in env) — passed.
+- Manual verification of the `extract_email_body` fix against multipart/alternative (plain+html), html-only, and non-multipart inputs — all three returned the expected body.
+
+## Not applied / left as-is
+- `logging.basicConfig()` staying hand-rolled rather than adopting the portfolio's shared `fleet-logging` — judged fine again this pass; this is a stdio MCP server that logs straight to stderr, which is the correct convention for this transport, not a gap a shared HTTP/file-sink logging lib would close.
+- No new duplication/module-boundary tooling introduced — single-module repo, still speculative generality per the YAGNI guardrail.
+- `.claude/` (untracked, pre-existing local skill docs) left alone — not code, out of scope for this pass, not committed.
+
+---
+
 # Codebase Polish — 2026-08-11
 
 One pass over the whole repo (single file `proton_email_server.py` + its test file). Grounded in a live best-practices sweep (see Standards Brief below), reviewed by three parallel lenses, applied directly, then checked for regressions.
