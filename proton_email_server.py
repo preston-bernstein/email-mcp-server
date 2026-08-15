@@ -55,24 +55,36 @@ def decode_email_header(header):
     return decoded_string
 
 def extract_email_body(message):
-    """Extract email body from message."""
-    body = ""
-    if message.is_multipart():
-        for part in message.walk():
-            content_type = part.get_content_type()
-            content_disposition = str(part.get("Content-Disposition"))
+    """Extract email body from message, preferring the plain-text part.
 
-            if content_type in ["text/plain", "text/html"] and "attachment" not in content_disposition:
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset()
-                if payload:
-                    body += payload.decode(charset or "utf-8", errors="replace")
-    else:
+    Multipart/alternative messages carry the same content twice (once as
+    text/plain, once as text/html); falling back to HTML markup only when
+    no plain-text part exists avoids returning both concatenated together.
+    """
+    if not message.is_multipart():
         payload = message.get_payload(decode=True)
         charset = message.get_content_charset()
-        if payload:
-            body = payload.decode(charset or "utf-8", errors="replace")
-    return body
+        return payload.decode(charset or "utf-8", errors="replace") if payload else ""
+
+    html_body = ""
+    for part in message.walk():
+        content_type = part.get_content_type()
+        content_disposition = str(part.get("Content-Disposition"))
+        if "attachment" in content_disposition:
+            continue
+
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        charset = part.get_content_charset()
+        decoded = payload.decode(charset or "utf-8", errors="replace")
+
+        if content_type == "text/plain":
+            return decoded
+        if content_type == "text/html" and not html_body:
+            html_body = decoded
+
+    return html_body
 
 
 def _missing_credentials() -> str | None:
@@ -146,8 +158,8 @@ def imap_session(folder: str | None = None):
     finally:
         try:
             mail.logout()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"IMAP logout failed (ignored): {exc}")
 
 
 def _log_failure(context: str, exc: Exception):
@@ -422,6 +434,6 @@ if __name__ == "__main__":
             uvicorn.run(app, host=host, port=port)
         else:
             mcp.run(transport="stdio")
-    except Exception as e:
-        logger.error(f"Server error: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Server error")
         sys.exit(1)
