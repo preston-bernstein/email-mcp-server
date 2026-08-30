@@ -1,16 +1,27 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt pytest pytest-asyncio
-      - run: pytest
+  ci:
+    uses: preston-bernstein/ci-workflows/.github/workflows/python.yml@v1
+    with:
+      python-versions: '["3.12"]'
+      install: pip install -r requirements.txt pytest pytest-asyncio
+      lint: ''
+      test: pytest
+
+  workflows:
+    uses: preston-bernstein/ci-workflows/.github/workflows/actions-lint.yml@v1
