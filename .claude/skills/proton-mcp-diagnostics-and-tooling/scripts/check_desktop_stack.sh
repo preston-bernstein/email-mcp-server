@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# check_desktop_stack.sh — is the email stack up on the desktop (10.0.0.243)?
+# check_desktop_stack.sh — is the email stack up on the desktop host?
 #
-# Via `ssh desktop-agent` (read-only), checks:
+# Via `ssh $PROTON_MCP_SSH_HOST` (read-only), checks:
 #   1. docker ps — containers protonmail-bridge, proton-email-mcp, and LibreChat*
 #      (name/status/uptime)
 #   2. ss -tln — listening TCP sockets for ports 1143 (IMAP), 1025 (SMTP),
@@ -9,22 +9,40 @@
 #
 # Runs no restarts, reads no secrets, changes nothing.
 #
+# Host config: this script never hardcodes a real SSH alias/host. It defaults
+# to loopback (127.0.0.1, which will simply fail to ssh — a safe no-op) and
+# reads your real deployment target from a repo-root .env (gitignored, never
+# committed — see .env.example) via PROTON_MCP_SSH_HOST, or an explicit
+# override on the command line.
+#
 # Usage:
 #   ./check_desktop_stack.sh
-#   SSH_TARGET=desktop-agent ./check_desktop_stack.sh
+#   PROTON_MCP_SSH_HOST=<your-desktop-ssh-alias> ./check_desktop_stack.sh
+#   SSH_TARGET=<your-desktop-ssh-alias> ./check_desktop_stack.sh
 #
 # Exit code: 0 = both containers Up and all three ports listening, 1 otherwise.
 
 set -uo pipefail
 
-SSH_TARGET="${SSH_TARGET:-desktop-agent}"
+# Load repo-root .env if present (gitignored; holds your real deployment values).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${PROTON_MCP_ENV_FILE:-$SCRIPT_DIR/../../../../.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
+
+SSH_TARGET="${SSH_TARGET:-${PROTON_MCP_SSH_HOST:-127.0.0.1}}"
 overall=0
 
 echo "== proton-email-mcp desktop stack check (via ssh $SSH_TARGET) =="
 echo
 
 if ! ssh -o ConnectTimeout=10 "$SSH_TARGET" true 2>/dev/null; then
-  echo "FAIL: cannot ssh to '$SSH_TARGET'. Is the desktop up? Check ~/.ssh/config and key."
+  echo "FAIL: cannot ssh to '$SSH_TARGET'. Is the desktop up? Check ~/.ssh/config and key,"
+  echo "  and set PROTON_MCP_SSH_HOST in a repo-root .env (see .env.example)."
   echo "CONCLUSION: FAIL — no data gathered."
   exit 1
 fi

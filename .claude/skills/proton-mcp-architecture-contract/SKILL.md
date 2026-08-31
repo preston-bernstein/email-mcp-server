@@ -34,7 +34,7 @@ exposing 5 email tools (`read_recent_emails`, `search_emails`, `send_email`,
 daemon that translates IMAP/SMTP to the encrypted Proton API) on
 `PROTON_BRIDGE_HOST:1143` (IMAP) and `:1025` (SMTP). It runs in two places from the
 same source: stdio transport under Claude Code on the Mac, and streamable-http in a
-Docker container on the desktop (10.0.0.243:3004) for LibreChat. One commit in history
+Docker container on the desktop ($PROTON_MCP_HOST:3004) for LibreChat. One commit in history
 (`d34a476`, 2026-06-20, as of 2026-07-02); 12 mocked pytest tests; no CI.
 
 ## Design decisions and WHY
@@ -87,13 +87,13 @@ fix is allowed and how it is reviewed is owned by `proton-mcp-change-control`.
 
 | # | Weakness | Detail | Status |
 |---|---|---|---|
-| W1 | Plaintext IMAP over LAN | Mac deployment sets `PROTON_BRIDGE_HOST=10.0.0.243`; `imaplib.IMAP4` is plaintext, so the Bridge password crosses the LAN unencrypted on every tool call. (Whether this Bridge build accepts STARTTLS on 1143 is UNVERIFIED.) | open |
+| W1 | Plaintext IMAP over LAN | Mac deployment sets `PROTON_BRIDGE_HOST=$PROTON_MCP_HOST`; `imaplib.IMAP4` is plaintext, so the Bridge password crosses the LAN unencrypted on every tool call. (Whether this Bridge build accepts STARTTLS on 1143 is UNVERIFIED.) | open |
 | W2 | `CERT_NONE` on SMTP | STARTTLS encrypts but does not verify the Bridge's self-signed cert (see D11). MITM on the LAN path could impersonate the SMTP server. | open |
 | W3 | Unauthenticated 0.0.0.0:3004 | Desktop streamable-http endpoint has no auth and binds all interfaces: any LAN device can read mail and send email as the account. | open |
 | W4 | No socket timeout in `read_recent_emails` | Only `search_emails` sets `mail.sock.settimeout(15)` (line 151). A hung IMAP connection in `read_recent_emails` (line 85 area) blocks indefinitely — same failure class as the pre-git search hang. | open |
 | W5 | `logout()` not in `finally` | Every tool calls `mail.logout()` on success paths only; an exception mid-tool leaks the IMAP connection. | open |
 | W6 | Stats "7 days" bug | `get_email_stats` labels a count "Recent emails (7 days)" but line 307 searches `SINCE <today>` (`datetime.now().strftime("%d-%b-%Y")`) — it counts TODAY only. Known bug, not fixed. | open |
-| W7 | Vestigial requirements | `secure-smtplib`, `httpx`, `python-dotenv` are in requirements.txt but never imported; the server NEVER loads `.env` (config must come from the process environment — `.env.example` is a template only, and its `127.0.0.1` host does not match the real Mac deployment's `10.0.0.243`). Removal changes the Docker build — change control. | open |
+| W7 | Vestigial requirements | `secure-smtplib`, `httpx`, `python-dotenv` are in requirements.txt but never imported; the server NEVER loads `.env` (config must come from the process environment — `.env.example` is a template only, and its `127.0.0.1` host does not match the real Mac deployment's `$PROTON_MCP_HOST`). Removal changes the Docker build — change control. | open |
 | W8 | 3-copy source drift | Same source exists at the Mac repo (canonical), `/home/preston/docker/proton-email-mcp`, and `/opt/docker/librechat-stack/proton-email-mcp` on the desktop. No deploy pipeline; prod image built 2026-06-20. Drift MEASURED 2026-07-02: the `/home/preston` copy is a stale pre-fix snapshot; the librechat-stack copy matched canonical (worked example in `proton-mcp-diagnostics-and-tooling`; re-measure before acting). Edit the Mac repo first, always. | open |
 | W9 | Dev/prod Python skew | Dev venv is Python 3.14.6; prod image is `python:3.12-slim`. "Passes locally" does not prove "runs in the image". | open |
 
@@ -135,8 +135,8 @@ else, route to the sibling skill:
 ## Provenance and maintenance
 
 Sources: repo at `/Users/prestonbernstein/dev/proton-email-mcp` (read directly) and the
-verified facts pack dated 2026-07-02. Facts about the desktop (10.0.0.243) come from the
-facts pack, not fresh SSH; re-verify them from a machine with `ssh desktop-agent` access.
+verified facts pack dated 2026-07-02. Facts about the desktop ($PROTON_MCP_HOST) come from the
+facts pack, not fresh SSH; re-verify them from a machine with `ssh $PROTON_MCP_SSH_HOST` access.
 
 Re-verification one-liners for every drift-prone fact:
 
@@ -153,8 +153,8 @@ Re-verification one-liners for every drift-prone fact:
 | Dev Python (3.14.6) | `/Users/prestonbernstein/dev/proton-email-mcp/venv/bin/python --version` |
 | Prod image Python (3.12) | `grep -n 'FROM' /Users/prestonbernstein/dev/proton-email-mcp/Dockerfile` |
 | Git history (single commit d34a476) | `git -C /Users/prestonbernstein/dev/proton-email-mcp log --oneline` |
-| Desktop container config (host net, :3004) | from a machine with access: `ssh desktop-agent "docker inspect proton-email-mcp --format '{{.HostConfig.NetworkMode}} {{.Config.Env}}'"` (do not paste credential env values anywhere) |
-| W8: source drift between the 3 copies | `ssh desktop-agent "md5sum /home/preston/docker/proton-email-mcp/proton_email_server.py /opt/docker/librechat-stack/proton-email-mcp/proton_email_server.py"` vs `md5 -q /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py` |
+| Desktop container config (host net, :3004) | from a machine with access: `ssh $PROTON_MCP_SSH_HOST "docker inspect proton-email-mcp --format '{{.HostConfig.NetworkMode}} {{.Config.Env}}'"` (do not paste credential env values anywhere) |
+| W8: source drift between the 3 copies | `ssh $PROTON_MCP_SSH_HOST "md5sum /home/preston/docker/proton-email-mcp/proton_email_server.py /opt/docker/librechat-stack/proton-email-mcp/proton_email_server.py"` vs `md5 -q /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py` |
 
 Maintenance rule: any commit touching `proton_email_server.py`, `Dockerfile`, or
 `requirements.txt` should re-run at least the first four commands and update this file's

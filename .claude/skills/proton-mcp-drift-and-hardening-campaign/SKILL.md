@@ -25,8 +25,9 @@ every Track B change ships through the same build/deploy path Track A establishe
    account email address into any command output you keep, doc, commit, or chat
    transcript. `docker inspect` of the prod container PRINTS credentials — when you
    must capture it, pipe to a root-only file **on the desktop** (procedure in A2.1).
-4. **Desktop access:** `ssh desktop-agent` (agent user, key `~/.ssh/agent_ed25519`,
-   NOPASSWD sudo). Never `preston@`.
+4. **Desktop access:** `ssh $PROTON_MCP_SSH_HOST` (a dedicated non-interactive SSH
+   identity with sudo access, resolved via your own `~/.ssh/config`). Never your
+   personal login.
 5. **No live email sends** during this campaign. Validation uses read-only probes only.
 6. **Standard validation gate** (referenced as "STANDARD GATE" below) — every phase
    ends with ALL of:
@@ -34,7 +35,7 @@ every Track B change ships through the same build/deploy path Track A establishe
      → `12 passed` (or more if tests were added; never fewer).
    - Read-only live smoke from the Mac:
      `python3 .claude/skills/proton-mcp-diagnostics-and-tooling/scripts/smoke_imap_readonly.py`
-     with `PROTON_BRIDGE_HOST=10.0.0.243` and credentials sourced from
+     with `PROTON_BRIDGE_HOST=$PROTON_MCP_HOST` and credentials sourced from
      `~/.claude.json → mcpServers.proton-mail.env` (export in-shell; do not echo) → exit 0.
    - `.claude/skills/proton-mcp-diagnostics-and-tooling/scripts/drift_check.sh` → exit 0, all MATCH.
    - The phase-specific measurable criterion stated in that phase.
@@ -88,14 +89,14 @@ cd /Users/prestonbernstein/dev/proton-email-mcp
 ```
 
 It hashes `proton_email_server.py`, `Dockerfile`, `requirements.txt` in all three
-locations (desktop via `ssh desktop-agent sudo sha256sum`, read-only).
+locations (desktop via `ssh $PROTON_MCP_SSH_HOST sudo sha256sum`, read-only).
 
 **DECISION GATE A0:**
 - Exit 0, `CONCLUSION: PASS` (all MATCH) → source drift does not exist; **skip to
   Phase A2** (you still need a designated build context and a fresh image — the
   prod image is dated 2026-06-20 regardless).
 - Exit 1 with any `DRIFT` verdict → **Phase A1**.
-- Exit 1 with `FAIL: cannot ssh` → fix SSH first (`ssh desktop-agent true` must
+- Exit 1 with `FAIL: cannot ssh` → fix SSH first (`ssh $PROTON_MCP_SSH_HOST true` must
   succeed); see `proton-mcp-diagnostics-and-tooling`. Do not proceed blind.
 - Any file `MISSING` in a desktop copy → treat as DRIFT → Phase A1 (a missing file
   is still a difference to reconcile, not a license to overwrite).
@@ -109,11 +110,11 @@ as the file argument, so `<` lines are DESKTOP content and `>` lines are MAC con
 
 ```bash
 # Copy A vs Mac repo (repeat per drifted file: Dockerfile, requirements.txt)
-ssh desktop-agent sudo cat /home/preston/docker/proton-email-mcp/proton_email_server.py \
+ssh $PROTON_MCP_SSH_HOST sudo cat /home/preston/docker/proton-email-mcp/proton_email_server.py \
   | diff - /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py
 
 # Copy B vs Mac repo
-ssh desktop-agent sudo cat /opt/docker/librechat-stack/proton-email-mcp/proton_email_server.py \
+ssh $PROTON_MCP_SSH_HOST sudo cat /opt/docker/librechat-stack/proton-email-mcp/proton_email_server.py \
   | diff - /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py
 ```
 
@@ -146,7 +147,7 @@ that desktop services live under service/stack paths, not preston's home.
 **DECISION GATE A2-location:** accept copy B unless Phase A1 produced concrete
 evidence the prod image is built from copy A by an automated process (a cron entry,
 a script, a compose `build:` stanza pointing there — check
-`ssh desktop-agent "sudo crontab -l -u preston; sudo grep -rn 'proton-email-mcp' /opt/docker/ /etc/systemd/system/ 2>/dev/null | grep -v Binary"`).
+`ssh $PROTON_MCP_SSH_HOST "sudo crontab -l -u preston; sudo grep -rn 'proton-email-mcp' /opt/docker/ /etc/systemd/system/ 2>/dev/null | grep -v Binary"`).
 If such automation exists → update the automation to copy B as part of this phase,
 via change control. If you cannot determine → still choose copy B, but keep copy A
 synced (step A2.3 syncs both) so nothing referencing it breaks.
@@ -162,13 +163,13 @@ this paragraph over a live inspect:
 
 ```bash
 # Full inspect to a root-only file ON THE DESKTOP (contains credentials — never cat it into your transcript)
-ssh desktop-agent "sudo docker inspect proton-email-mcp | sudo tee /root/proton-email-mcp.inspect.$(date +%Y%m%d).json >/dev/null && sudo chmod 600 /root/proton-email-mcp.inspect.$(date +%Y%m%d).json"
+ssh $PROTON_MCP_SSH_HOST "sudo docker inspect proton-email-mcp | sudo tee /root/proton-email-mcp.inspect.$(date +%Y%m%d).json >/dev/null && sudo chmod 600 /root/proton-email-mcp.inspect.$(date +%Y%m%d).json"
 
 # Credential-free summary you MAY read (redacts values of PROTON_* vars)
-ssh desktop-agent "sudo docker inspect proton-email-mcp --format 'Image={{.Config.Image}} Net={{.HostConfig.NetworkMode}} Restart={{.HostConfig.RestartPolicy.Name}} Mounts={{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' && sudo docker inspect proton-email-mcp --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -E 's/^(PROTON_USERNAME|PROTON_PASSWORD)=.*/\1=<REDACTED-present>/'"
+ssh $PROTON_MCP_SSH_HOST "sudo docker inspect proton-email-mcp --format 'Image={{.Config.Image}} Net={{.HostConfig.NetworkMode}} Restart={{.HostConfig.RestartPolicy.Name}} Mounts={{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' && sudo docker inspect proton-email-mcp --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -E 's/^(PROTON_USERNAME|PROTON_PASSWORD)=.*/\1=<REDACTED-present>/'"
 
 # Env file for recreation (root-only, on desktop; values never leave the machine)
-ssh desktop-agent "sudo docker inspect proton-email-mcp --format '{{range .Config.Env}}{{println .}}{{end}}' | sudo tee /root/proton-email-mcp.env >/dev/null && sudo chmod 600 /root/proton-email-mcp.env"
+ssh $PROTON_MCP_SSH_HOST "sudo docker inspect proton-email-mcp --format '{{range .Config.Env}}{{println .}}{{end}}' | sudo tee /root/proton-email-mcp.env >/dev/null && sudo chmod 600 /root/proton-email-mcp.env"
 ```
 
 **EXPECTED:** `Net=host`, `Restart=always`, env list containing
@@ -177,7 +178,7 @@ both `PROTON_*` vars `<REDACTED-present>`, no Mounts.
 **If you see instead:** a compose project label
 (`{{index .Config.Labels "com.docker.compose.project"}}` non-empty) → the container
 IS compose-managed after all; find that compose file
-(`ssh desktop-agent "sudo docker inspect proton-email-mcp --format '{{index .Config.Labels \"com.docker.compose.project.working_dir\"}}'"`)
+(`ssh $PROTON_MCP_SSH_HOST "sudo docker inspect proton-email-mcp --format '{{index .Config.Labels \"com.docker.compose.project.working_dir\"}}'"`)
 and do the rebuild/recreate through `docker compose` in that directory instead of
 the `docker run` in A2.4. **If Mounts is non-empty** → the container bind-mounts
 source or config; identify what before proceeding (a source bind-mount changes the
@@ -198,9 +199,9 @@ The agent user likely cannot write `/opt/docker/` or `/home/preston/` directly
 ```bash
 cd /Users/prestonbernstein/dev/proton-email-mcp
 rsync -av proton_email_server.py Dockerfile requirements.txt .env.example \
-  desktop-agent:proton-email-mcp-staging/
+  $PROTON_MCP_SSH_HOST:proton-email-mcp-staging/
 
-ssh desktop-agent "sudo mkdir -p /opt/docker/librechat-stack/proton-email-mcp /home/preston/docker/proton-email-mcp \
+ssh $PROTON_MCP_SSH_HOST "sudo mkdir -p /opt/docker/librechat-stack/proton-email-mcp /home/preston/docker/proton-email-mcp \
   && sudo cp ~/proton-email-mcp-staging/* /opt/docker/librechat-stack/proton-email-mcp/ \
   && sudo cp ~/proton-email-mcp-staging/* /home/preston/docker/proton-email-mcp/ \
   && rm -rf ~/proton-email-mcp-staging"
@@ -215,12 +216,12 @@ and diff again; do not build from an unverified context.
 ### A2.3 — Rebuild the image from the designated context
 
 ```bash
-ssh desktop-agent "sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp"
+ssh $PROTON_MCP_SSH_HOST "sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp"
 ```
 
 **EXPECTED:** build succeeds; final line reports the image tagged. Then confirm
 freshness:
-`ssh desktop-agent "sudo docker inspect proton-email-mcp:latest --format '{{.Created}}'"`
+`ssh $PROTON_MCP_SSH_HOST "sudo docker inspect proton-email-mcp:latest --format '{{.Created}}'"`
 → today's date. **If build fails** on `pip install` → network/PyPI issue or a
 requirements.txt change from Track B4 landed early; see `proton-mcp-build-and-env`.
 
@@ -230,7 +231,7 @@ Skip this subsection and use `docker compose up -d --build` in the discovered
 compose dir if A2.1 revealed compose management. Otherwise:
 
 ```bash
-ssh desktop-agent "sudo docker rm -f proton-email-mcp \
+ssh $PROTON_MCP_SSH_HOST "sudo docker rm -f proton-email-mcp \
   && sudo docker run -d --name proton-email-mcp \
        --network host --restart always \
        --env-file /root/proton-email-mcp.env \
@@ -244,7 +245,7 @@ is harmless — identical values.)
 Verify the process:
 
 ```bash
-ssh desktop-agent "sudo docker ps --filter name=proton-email-mcp --format '{{.Status}}' && sudo docker logs proton-email-mcp --tail 20 2>&1 | grep -v -i password"
+ssh $PROTON_MCP_SSH_HOST "sudo docker ps --filter name=proton-email-mcp --format '{{.Status}}' && sudo docker logs proton-email-mcp --tail 20 2>&1 | grep -v -i password"
 ```
 
 **EXPECTED:** status `Up ...`; logs show
@@ -258,7 +259,7 @@ vars; restore from the inspect JSON at `/root/proton-email-mcp.inspect.<date>.js
 Endpoint liveness (from the desktop; measurable, no UI):
 
 ```bash
-ssh desktop-agent "curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:3004/mcp \
+ssh $PROTON_MCP_SSH_HOST "curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:3004/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}'"
 ```
@@ -272,9 +273,9 @@ container logs.
 LibreChat's container name is **UNVERIFIED** — discover, then restart:
 
 ```bash
-ssh desktop-agent "sudo docker ps --format '{{.Names}}' | grep -i -E 'librechat|chat'"
-ssh desktop-agent "sudo docker restart <discovered-name>"
-ssh desktop-agent "sudo docker logs <discovered-name> --since 3m 2>&1 | grep -i -E 'proton|mcp' | head -20"
+ssh $PROTON_MCP_SSH_HOST "sudo docker ps --format '{{.Names}}' | grep -i -E 'librechat|chat'"
+ssh $PROTON_MCP_SSH_HOST "sudo docker restart <discovered-name>"
+ssh $PROTON_MCP_SSH_HOST "sudo docker logs <discovered-name> --since 3m 2>&1 | grep -i -E 'proton|mcp' | head -20"
 ```
 
 **EXPECTED:** log lines indicating the `proton-email` MCP server initialized /
@@ -306,7 +307,7 @@ End state: exactly two copies (Mac canonical + one desktop build context). Steps
 (1) update `drift_check.sh` (diagnostics skill, via change control) to drop or
 make optional `DESKTOP_A`; (2) confirm nothing references copy A (rerun the A2
 grep for automation); (3)
-`ssh desktop-agent "sudo mv /home/preston/docker/proton-email-mcp /home/preston/docker/proton-email-mcp.DEPRECATED-$(date +%Y%m%d)"`.
+`ssh $PROTON_MCP_SSH_HOST "sudo mv /home/preston/docker/proton-email-mcp /home/preston/docker/proton-email-mcp.DEPRECATED-$(date +%Y%m%d)"`.
 Order matters: script first, or drift_check starts failing with MISSING.
 
 **Phase A3 / Track A success criterion:** `drift_check.sh` exit 0 all-MATCH AND
@@ -344,7 +345,7 @@ own network mode — **UNVERIFIED**.
 **Verification experiment (PREREQUISITE — decision gate):**
 
 ```bash
-ssh desktop-agent "sudo docker inspect <librechat-container-name> --format '{{.HostConfig.NetworkMode}}'"
+ssh $PROTON_MCP_SSH_HOST "sudo docker inspect <librechat-container-name> --format '{{.HostConfig.NetworkMode}}'"
 ```
 
 (discover the name as in A2.5 first)
@@ -362,7 +363,8 @@ ssh desktop-agent "sudo docker inspect <librechat-container-name> --format '{{.H
   facts pack recorded `localhost`, dated 2026-07-02, but re-verify);
   `network_mode: host` on just the api service; a proxy/sidecar. Resolve the
   contradiction, THEN decide: if LibreChat reaches the host via the docker bridge
-  gateway (e.g. 172.17.0.1), binding 127.0.0.1 **breaks LibreChat** — instead bind
+  gateway (Docker's default bridge subnet auto-assigns this — run `ip route | grep
+  default` inside the container to find it), binding 127.0.0.1 **breaks LibreChat** — instead bind
   `MCP_HOST` to the docker bridge gateway IP, or better, attach the MCP container
   to LibreChat's compose network and remove host networking entirely (bigger
   change; classify accordingly).
@@ -379,7 +381,7 @@ A2.1-style capture preserves it (the env-file recapture will now contain it —
 self-preserving).
 
 **Validation (measurable):**
-- From the Mac: `nc -z -w 3 10.0.0.243 3004` → **FAILS** (non-zero exit).
+- From the Mac: `nc -z -w 3 $PROTON_MCP_HOST 3004` → **FAILS** (non-zero exit).
 - From the desktop: the A2.4 curl-initialize against `http://localhost:3004/mcp` → `200`.
 - LibreChat log check (A2.5 procedure) shows proton-email initialized, no errors.
 - STANDARD GATE.
@@ -393,7 +395,7 @@ be measured before writing any code.
 **Verification experiment (run from the Mac):**
 
 ```bash
-openssl s_client -connect 10.0.0.243:1143 -starttls imap </dev/null
+openssl s_client -connect $PROTON_MCP_HOST:1143 -starttls imap </dev/null
 ```
 
 - **EXPECTED (supported):** certificate details print (subject/issuer — Bridge
@@ -423,11 +425,11 @@ BOTH the new IMAP context and SMTP's existing `_ctx` at L230-232, currently
 | Option | Properties | Choose when |
 |---|---|---|
 | `CERT_NONE` + encryption | Stops passive LAN sniffing of the Bridge password; no MITM protection | Minimum acceptable step; smallest diff |
-| Pin the Bridge cert | `load_verify_locations(<bridge-cert>.pem)`, `verify_mode=CERT_REQUIRED`, `check_hostname=False` (CN is UNVERIFIED, likely not 10.0.0.243); stronger — MITM-resistant | Preferred end state; adds maintenance (cert lives in the Bridge volume and changes if Bridge regenerates it) |
+| Pin the Bridge cert | `load_verify_locations(<bridge-cert>.pem)`, `verify_mode=CERT_REQUIRED`, `check_hostname=False` (CN is UNVERIFIED, likely not $PROTON_MCP_HOST); stronger — MITM-resistant | Preferred end state; adds maintenance (cert lives in the Bridge volume and changes if Bridge regenerates it) |
 
 To pin: the cert lives in the Bridge data volume
 `/opt/docker/auth-stack/data/protonmail-bridge` (exact filename UNVERIFIED —
-locate with `ssh desktop-agent "sudo find /opt/docker/auth-stack/data/protonmail-bridge -name '*.pem' 2>/dev/null"`;
+locate with `ssh $PROTON_MCP_SSH_HOST "sudo find /opt/docker/auth-stack/data/protonmail-bridge -name '*.pem' 2>/dev/null"`;
 the cert is public material and safe to copy — the KEY file is not; copy only the
 cert). Ship it to both deployments and reference via a new env var
 (e.g. `PROTON_BRIDGE_CA_FILE`, default empty = CERT_NONE behavior) so the change is
@@ -447,7 +449,7 @@ Keep the constructor discipline: FastMCP takes the name string only (line-26
   live Bridge and call `list_folders` (read-only) → folder list returned, no TLS
   errors.
 - Packet-level proof (optional but decisive): on the desktop,
-  `ssh desktop-agent "sudo timeout 15 tcpdump -i any -c 20 -A port 1143 2>/dev/null | grep -c LOGIN"`
+  `ssh $PROTON_MCP_SSH_HOST "sudo timeout 15 tcpdump -i any -c 20 -A port 1143 2>/dev/null | grep -c LOGIN"`
   while a read tool runs from the Mac → expect `0` (credentials no longer visible
   in cleartext). Pre-change, the same capture shows the LOGIN command.
 - STANDARD GATE.
@@ -466,7 +468,7 @@ LibreChat version, B3 is not viable without upgrading LibreChat — a much bigge
 change; stop and re-scope.
 
 **Verification experiments:**
-1. `ssh desktop-agent "sudo cat /opt/docker/librechat-stack/Caddyfile"` — learn
+1. `ssh $PROTON_MCP_SSH_HOST "sudo cat /opt/docker/librechat-stack/Caddyfile"` — learn
    what Caddy already serves and whether it's even running
    (`sudo docker ps --format '{{.Names}}' | grep -i caddy`).
 2. LibreChat docs check for `headers:` under `mcpServers` (and env-var
@@ -481,7 +483,7 @@ in the LibreChat stack's env file, never in the repo, never in librechat.yaml
 literally, never in this skill.
 
 **Validation (measurable):** curl-initialize WITHOUT the header → 401/403;
-WITH the header → 200; `nc -z -w 3 10.0.0.243 3004` from the Mac fails (B1 still
+WITH the header → 200; `nc -z -w 3 $PROTON_MCP_HOST 3004` from the Mac fails (B1 still
 holds); LibreChat tools work; STANDARD GATE.
 
 ## B4 — Dependency hygiene (cheap, do alongside any image rebuild)
@@ -498,7 +500,7 @@ affecting (changes the Docker build) → change control.
   2026-07-02: pytest 9.1.1, pytest-asyncio 1.4.0 — pin `>=` those).
 
 **Validation gate (measurable):** fresh image builds
-(`ssh desktop-agent "sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp"`
+(`ssh $PROTON_MCP_SSH_HOST "sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp"`
 after syncing per A2.2) → success; container recreated per A2.4 → curl-initialize
 200; `./venv/bin/python -m pytest tests/ -q` → 12+ passed; STANDARD GATE. If the
 image build fails on a missing transitive dep → revert requirements.txt (the diff

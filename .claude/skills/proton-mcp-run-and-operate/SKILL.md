@@ -4,9 +4,9 @@ description: >
   Runbook and full configuration reference for operating proton-email-mcp. Load this skill when
   starting or restarting the server (stdio or streamable-http), running a local smoke test,
   registering or fixing the server in Claude Code (~/.claude.json mcpServers), deploying or
-  redeploying to the desktop (10.0.0.243) Docker container, wiring or troubleshooting LibreChat's
+  redeploying to the desktop ($PROTON_MCP_HOST) Docker container, wiring or troubleshooting LibreChat's
   MCP connection, restarting the Proton Bridge container, or answering "where does this run",
-  "which env var controls X", "why is the host 127.0.0.1 vs 10.0.0.243", or "how do I ship this
+  "which env var controls X", "why is the host 127.0.0.1 vs $PROTON_MCP_HOST", or "how do I ship this
   change to both deployments". This skill OWNS the env-var configuration table; sibling skills
   cross-reference it.
 ---
@@ -36,8 +36,8 @@ Two production deployments of the SAME source, plus the Bridge they both talk to
 
 | # | What | Where | Transport | Talks to Bridge at |
 |---|---|---|---|---|
-| A | Claude Code MCP server | Mac, launched from `~/.claude.json` | stdio | `10.0.0.243:1143/1025` (over LAN) |
-| B | `proton-email-mcp` Docker container | Desktop 10.0.0.243, host networking, `:3004` | streamable-http | `localhost:1143/1025` |
+| A | Claude Code MCP server | Mac, launched from `~/.claude.json` | stdio | `$PROTON_MCP_HOST:1143/1025` (over LAN) |
+| B | `proton-email-mcp` Docker container | Desktop $PROTON_MCP_HOST, host networking, `:3004` | streamable-http | `localhost:1143/1025` |
 | C | `protonmail-bridge` Docker container | Desktop, auth-stack compose | n/a (is the Bridge) | Proton's servers |
 | D | LibreChat | Desktop, `/opt/docker/librechat-stack/` | consumes B at `http://localhost:3004/mcp` | n/a |
 
@@ -69,7 +69,7 @@ address into any file — reference locations only.
 |---|---|---|---|
 | `PROTON_USERNAME` | `""` | set in `~/.claude.json` (do NOT copy value) | set in container env |
 | `PROTON_PASSWORD` | `""` | set in `~/.claude.json` (Bridge app password, NOT the account password) | set in container env |
-| `PROTON_BRIDGE_HOST` | `127.0.0.1` | `10.0.0.243` | `localhost` (host networking) |
+| `PROTON_BRIDGE_HOST` | `127.0.0.1` | `$PROTON_MCP_HOST` | `localhost` (host networking) |
 | `PROTON_BRIDGE_IMAP_PORT` | `1143` | `1143` | `1143` |
 | `PROTON_BRIDGE_SMTP_PORT` | `1025` | `1025` | `1025` |
 | `MCP_TRANSPORT` | `stdio` | (unset → stdio) | `streamable-http` |
@@ -77,7 +77,7 @@ address into any file — reference locations only.
 | `MCP_PORT` | `3004` | n/a (stdio) | `3004` |
 
 **TRAP — `.env.example` vs reality:** the template says `PROTON_BRIDGE_HOST=127.0.0.1`, but the
-real Mac deployment points at `10.0.0.243` (Bridge runs on the desktop, not the Mac). The
+real Mac deployment points at `$PROTON_MCP_HOST` (Bridge runs on the desktop, not the Mac). The
 template is a template, not a record of deployment. This has confused sessions before. When in
 doubt, the deployment configs (`~/.claude.json`, container env) are the truth.
 
@@ -136,7 +136,7 @@ proper MCP handshake, so a plain GET returning 4xx is normal. Ctrl-C to stop. Do
 running: it is unauthenticated.
 
 To exercise Bridge connectivity from a manual run you'd also need
-`PROTON_BRIDGE_HOST=10.0.0.243` and credentials in the environment — prefer the read-only
+`PROTON_BRIDGE_HOST=$PROTON_MCP_HOST` and credentials in the environment — prefer the read-only
 smoke scripts in `proton-mcp-diagnostics-and-tooling` instead of hand-exporting creds.
 
 ## Claude Code registration (Mac)
@@ -146,7 +146,7 @@ Lives in `~/.claude.json` → `mcpServers["proton-mail"]` (as of 2026-07-02):
 - `command`: `/Users/prestonbernstein/dev/proton-email-mcp/venv/bin/python3.14`
 - `args`: `["/Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py"]` (absolute path)
 - `env`: `PROTON_USERNAME`, `PROTON_PASSWORD` (values live only in this file — never copy them
-  out), plus `PROTON_BRIDGE_HOST=10.0.0.243`
+  out), plus `PROTON_BRIDGE_HOST=$PROTON_MCP_HOST`
 - transport: stdio (no `MCP_TRANSPORT` needed; stdio is the code default)
 
 Tools surface in sessions as `mcp__proton-mail__<tool>`, e.g. `mcp__proton-mail__list_folders`,
@@ -163,9 +163,9 @@ tools are missing entirely, check `~/.claude.json` syntax and restart; if they r
 credential errors, check the env block; if they hang or return connection errors, the Bridge
 or LAN path is the suspect — see `proton-mcp-debugging-playbook`.
 
-## Desktop operations (all commands run via `ssh desktop-agent`)
+## Desktop operations (all commands run via `ssh $PROTON_MCP_SSH_HOST`)
 
-`desktop-agent` = agent user on 10.0.0.243, key `~/.ssh/agent_ed25519`, NOPASSWD sudo. Do not
+`$PROTON_MCP_SSH_HOST` = a dedicated non-interactive SSH identity (never your personal login) with sudo access on the desktop host, resolved via your own `~/.ssh/config`. Do not
 embed credentials in anything you write.
 
 ### Proton Bridge container (`protonmail-bridge`)
@@ -180,7 +180,7 @@ Restart (UNVERIFIED exact invocation — standard compose pattern, not executed 
 gathering):
 
 ```bash
-ssh desktop-agent 'cd /opt/docker/auth-stack && sudo docker compose restart protonmail-bridge'
+ssh $PROTON_MCP_SSH_HOST 'cd /opt/docker/auth-stack && sudo docker compose restart protonmail-bridge'
 ```
 
 Both MCP deployments break when the Bridge is down; check it first when both fail at once.
@@ -197,7 +197,7 @@ but unconfirmed). Therefore, before touching it, ALWAYS run the discovery step a
 full config:
 
 ```bash
-ssh desktop-agent 'sudo docker inspect proton-email-mcp'
+ssh $PROTON_MCP_SSH_HOST 'sudo docker inspect proton-email-mcp'
 ```
 
 Capture at minimum: `Config.Env` (contains credentials — read, reuse, never transcribe into
@@ -205,7 +205,7 @@ docs), `HostConfig.NetworkMode`, `HostConfig.RestartPolicy`, `Config.Image`, and
 `Config.Cmd`/`Entrypoint` overrides. A plain restart is safe without discovery:
 
 ```bash
-ssh desktop-agent 'sudo docker restart proton-email-mcp'
+ssh $PROTON_MCP_SSH_HOST 'sudo docker restart proton-email-mcp'
 ```
 
 ### LibreChat wiring
@@ -221,7 +221,7 @@ disables the server (no loud error — tools just never appear). If LibreChat ca
 tools, check this before anything else, then restart LibreChat so it re-handshakes:
 
 ```bash
-ssh desktop-agent 'cd /opt/docker/librechat-stack && sudo docker compose restart'
+ssh $PROTON_MCP_SSH_HOST 'cd /opt/docker/librechat-stack && sudo docker compose restart'
 ```
 
 (UNVERIFIED exact invocation — standard compose pattern; the service name for a targeted
@@ -245,7 +245,7 @@ read-only tool call (`mcp__proton-mail__list_folders`).
 No deploy pipeline exists (as of 2026-07-02); this is manual. Steps marked (U) depend on the
 UNVERIFIED launch method and require the discovery output first.
 
-1. Discovery (mandatory, see above): `ssh desktop-agent 'sudo docker inspect proton-email-mcp'`
+1. Discovery (mandatory, see above): `ssh $PROTON_MCP_SSH_HOST 'sudo docker inspect proton-email-mcp'`
    — save the env and run config before destroying anything.
 2. Copy source from the Mac repo to the designated desktop build context:
    `/opt/docker/librechat-stack/proton-email-mcp` — the copy that matched canonical when
@@ -257,23 +257,23 @@ UNVERIFIED launch method and require the discovery output first.
    scp /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py \
        /Users/prestonbernstein/dev/proton-email-mcp/requirements.txt \
        /Users/prestonbernstein/dev/proton-email-mcp/Dockerfile \
-       desktop-agent:proton-email-mcp-staging/
-   ssh desktop-agent 'sudo cp ~/proton-email-mcp-staging/* /opt/docker/librechat-stack/proton-email-mcp/ && rm -rf ~/proton-email-mcp-staging'
+       $PROTON_MCP_SSH_HOST:proton-email-mcp-staging/
+   ssh $PROTON_MCP_SSH_HOST 'sudo cp ~/proton-email-mcp-staging/* /opt/docker/librechat-stack/proton-email-mcp/ && rm -rf ~/proton-email-mcp-staging'
    ```
 
    (Staging via the agent home because `/opt/docker/` writability for the agent user is
    UNVERIFIED; `sudo cp` covers it.)
-3. Build: `ssh desktop-agent 'sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp'`
+3. Build: `ssh $PROTON_MCP_SSH_HOST 'sudo docker build -t proton-email-mcp:latest /opt/docker/librechat-stack/proton-email-mcp'`
 4. (U) Replace the container, re-using the EXACT env and flags from step 1:
 
    ```bash
-   ssh desktop-agent 'sudo docker stop proton-email-mcp && sudo docker rm proton-email-mcp'
+   ssh $PROTON_MCP_SSH_HOST 'sudo docker stop proton-email-mcp && sudo docker rm proton-email-mcp'
    # then docker run with: --name proton-email-mcp --network host --restart always
    # and -e flags reproducing the inspected Config.Env (credentials included — from
    # the inspect output, never from this document)
    ```
 
-5. Verify the port: `ssh desktop-agent 'sudo ss -tlnp | grep 3004'` and check container logs
+5. Verify the port: `ssh $PROTON_MCP_SSH_HOST 'sudo ss -tlnp | grep 3004'` and check container logs
    for the uvicorn startup line.
 6. Restart LibreChat (see above) so it re-handshakes and re-lists the tools.
 7. Verify end-to-end with a read-only tool call from LibreChat, or the smoke scripts in
@@ -314,17 +314,17 @@ Source of truth: proton-email-mcp verified facts pack dated 2026-07-02 (§4 conf
 topology), plus direct reads of `proton_email_server.py`, `Dockerfile`, and `.env.example` on
 2026-07-02. Items labeled UNVERIFIED or ASSUMPTION above were not directly confirmed.
 
-One-line re-verification commands (desktop ones via `ssh desktop-agent`):
+One-line re-verification commands (desktop ones via `ssh $PROTON_MCP_SSH_HOST`):
 
 | Fact | Re-verify with |
 |---|---|
-| Desktop container running, image, uptime | `ssh desktop-agent 'sudo docker ps --filter name=proton-email-mcp'` |
-| Desktop container env/launch config | `ssh desktop-agent 'sudo docker inspect proton-email-mcp'` |
-| Port 3004 listening on desktop | `ssh desktop-agent 'sudo ss -tlnp \| grep 3004'` |
-| Bridge container + ports | `ssh desktop-agent 'sudo docker ps --filter name=protonmail-bridge'` |
-| Bridge compose definition | `ssh desktop-agent 'grep -n -A15 protonmail-bridge /opt/docker/auth-stack/docker-compose.yml'` |
+| Desktop container running, image, uptime | `ssh $PROTON_MCP_SSH_HOST 'sudo docker ps --filter name=proton-email-mcp'` |
+| Desktop container env/launch config | `ssh $PROTON_MCP_SSH_HOST 'sudo docker inspect proton-email-mcp'` |
+| Port 3004 listening on desktop | `ssh $PROTON_MCP_SSH_HOST 'sudo ss -tlnp \| grep 3004'` |
+| Bridge container + ports | `ssh $PROTON_MCP_SSH_HOST 'sudo docker ps --filter name=protonmail-bridge'` |
+| Bridge compose definition | `ssh $PROTON_MCP_SSH_HOST 'grep -n -A15 protonmail-bridge /opt/docker/auth-stack/docker-compose.yml'` |
 | Mac Claude Code registration | `python3 -c "import json;d=json.load(open('$HOME/.claude.json'));print(json.dumps({k:v for k,v in d['mcpServers']['proton-mail'].items() if k!='env'},indent=2))"` (env omitted — contains creds) |
-| LibreChat MCP + allowedDomains | `ssh desktop-agent 'grep -n -B2 -A4 "proton-email\|allowedDomains" /opt/docker/librechat-stack/librechat.yaml'` |
+| LibreChat MCP + allowedDomains | `ssh $PROTON_MCP_SSH_HOST 'grep -n -B2 -A4 "proton-email\|allowedDomains" /opt/docker/librechat-stack/librechat.yaml'` |
 | Code defaults for env vars | `grep -n 'os.environ.get' /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py` |
 | .env.example still diverges from deployment | `grep -n PROTON_BRIDGE_HOST /Users/prestonbernstein/dev/proton-email-mcp/.env.example` |
 
