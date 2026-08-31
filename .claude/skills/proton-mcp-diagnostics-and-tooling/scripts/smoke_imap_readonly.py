@@ -5,12 +5,17 @@ Connects to the Bridge IMAP port, logs in, SELECTs a folder READ-ONLY,
 prints the message count, and logs out. Sends nothing, modifies nothing,
 never marks messages read (readonly SELECT), never prints the password.
 
+Host config: this script never hardcodes a real LAN address. It defaults to
+loopback (127.0.0.1) and reads your real deployment host from a repo-root
+.env (gitignored, never committed — see .env.example) via PROTON_MCP_HOST,
+or PROTON_BRIDGE_HOST directly.
+
 Env vars (credentials from the process environment only — sourced from
 ~/.claude.json mcpServers.proton-mail.env by the operator; never echo them):
     PROTON_USERNAME             required
     PROTON_PASSWORD             required (Bridge app password, NOT the Proton
                                 account password)
-    PROTON_BRIDGE_HOST          default desktop.example.internal
+    PROTON_BRIDGE_HOST          default: $PROTON_MCP_HOST, else 127.0.0.1
     PROTON_BRIDGE_IMAP_PORT     default 1143
     SMOKE_FOLDER                default INBOX
 
@@ -25,8 +30,31 @@ import imaplib
 import os
 import socket
 import sys
+from pathlib import Path
 
 TIMEOUT_SECONDS = 15
+
+
+def load_repo_root_env() -> None:
+    """Load a gitignored repo-root .env (if present) into os.environ without
+    overriding values already set in the real environment. No external
+    dependency — this script must run standalone."""
+    env_file = os.environ.get("PROTON_MCP_ENV_FILE")
+    if env_file:
+        candidate = Path(env_file)
+    else:
+        # scripts/ -> proton-mcp-diagnostics-and-tooling/ -> skills/ -> .claude/ -> repo root
+        candidate = Path(__file__).resolve().parents[4] / ".env"
+    if not candidate.is_file():
+        return
+    for line in candidate.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
 
 
 def fail(msg: str, code: int = 1) -> "None":
@@ -36,9 +64,13 @@ def fail(msg: str, code: int = 1) -> "None":
 
 
 def main() -> None:
+    load_repo_root_env()
+
     username = os.environ.get("PROTON_USERNAME", "")
     password = os.environ.get("PROTON_PASSWORD", "")
-    host = os.environ.get("PROTON_BRIDGE_HOST", "desktop.example.internal")
+    host = os.environ.get(
+        "PROTON_BRIDGE_HOST", os.environ.get("PROTON_MCP_HOST", "127.0.0.1")
+    )
     port = int(os.environ.get("PROTON_BRIDGE_IMAP_PORT", "1143"))
     folder = os.environ.get("SMOKE_FOLDER", "INBOX")
 

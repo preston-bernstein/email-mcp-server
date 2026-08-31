@@ -23,7 +23,7 @@ Line numbers refer to `proton_email_server.py` at commit `d34a476` (the only com
 
 Everything downstream of Bridge (including this entire MCP server) speaks ordinary IMAP/SMTP and knows nothing about Proton's encryption. That is why `proton_email_server.py` imports only stdlib `imaplib` (line 8) and `smtplib` (line 9) — no Proton SDK exists or is needed.
 
-**Where Bridge runs here** (facts pack §5C, verified 2026-07-02): as a Docker container `protonmail-bridge` on the desktop (desktop.example.internal), defined in `<docker-root>/auth-stack/docker-compose.yml`, publishing `1143:143` (IMAP) and `1025:25` (SMTP), with its state/auth in the volume `./data/protonmail-bridge:/root`. The MCP server reaches it via `PROTON_BRIDGE_HOST` / `PROTON_BRIDGE_IMAP_PORT` / `PROTON_BRIDGE_SMTP_PORT` (lines 31–33; defaults `127.0.0.1`, `1143`, `1025`).
+**Where Bridge runs here** (facts pack §5C, verified 2026-07-02): as a Docker container `protonmail-bridge` on the desktop ($PROTON_MCP_HOST), defined in `<docker-root>/auth-stack/docker-compose.yml`, publishing `1143:143` (IMAP) and `1025:25` (SMTP), with its state/auth in the volume `./data/protonmail-bridge:/root`. The MCP server reaches it via `PROTON_BRIDGE_HOST` / `PROTON_BRIDGE_IMAP_PORT` / `PROTON_BRIDGE_SMTP_PORT` (lines 31–33; defaults `127.0.0.1`, `1143`, `1025`).
 
 ### 1.1 App password, not account password — the #1 login confusion
 

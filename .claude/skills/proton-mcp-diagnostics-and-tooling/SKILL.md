@@ -18,7 +18,7 @@ Jargon, defined once:
   Bridge in 5 email tools. Runs twice: stdio on the Mac (Claude Code) and as desktop
   container `proton-email-mcp` serving **streamable-http on port 3004** (the HTTP
   transport where the client POSTs JSON-RPC to `/mcp`).
-- **Desktop** — the Linux box at `desktop.example.internal`, reachable read-only as `ssh desktop.example.internal`
+- **Desktop** — the Linux box at `$PROTON_MCP_HOST`, reachable read-only as `ssh $PROTON_MCP_SSH_HOST`
   (agent user, NOPASSWD sudo).
 - **Source drift** — three copies of the source exist (Mac git repo = canonical, plus two
   desktop directories); "drift" means their file hashes no longer match.
@@ -30,8 +30,8 @@ All are read-only: no email is sent, nothing is restarted, no secrets are read o
 | Script | Question it answers | Needs |
 |---|---|---|
 | `scripts/check_connectivity.sh` | Can this machine reach Bridge IMAP/SMTP and is the MCP HTTP server alive? | network only |
-| `scripts/drift_check.sh` | Do the 3 source copies still match? | `ssh desktop.example.internal` |
-| `scripts/check_desktop_stack.sh` | Are the desktop containers up and ports listening? | `ssh desktop.example.internal` |
+| `scripts/drift_check.sh` | Do the 3 source copies still match? | `ssh $PROTON_MCP_SSH_HOST` |
+| `scripts/check_desktop_stack.sh` | Are the desktop containers up and ports listening? | `ssh $PROTON_MCP_SSH_HOST` |
 | `scripts/smoke_imap_readonly.py` | Does the full IMAP path (connect, login, select) work end-to-end? | Bridge credentials in env |
 
 Start with `check_connectivity.sh` (cheapest, no SSH, no creds). Escalate only as needed.
@@ -52,19 +52,19 @@ Do not read a 4xx here as a failure.
 ```bash
 cd /Users/prestonbernstein/dev/proton-email-mcp
 .claude/skills/proton-mcp-diagnostics-and-tooling/scripts/check_connectivity.sh
-# override: BRIDGE_HOST=127.0.0.1 ... (defaults: BRIDGE_HOST=desktop.example.internal, MCP_PORT=3004)
+# override: BRIDGE_HOST=127.0.0.1 ... (defaults: BRIDGE_HOST=$PROTON_MCP_HOST, MCP_PORT=3004)
 ```
 
 **Healthy output — real run from the Mac, 2026-07-02:**
 
 ```
 == proton-email-mcp connectivity check ==
-Bridge host: desktop.example.internal | MCP host: desktop.example.internal
+Bridge host: $PROTON_MCP_HOST | MCP host: $PROTON_MCP_HOST
 
-PASS  Bridge IMAP                  desktop.example.internal:1143 open
-PASS  Bridge SMTP                  desktop.example.internal:1025 open
-PASS  MCP streamable-http          desktop.example.internal:3004 open
-PASS  MCP HTTP liveness            http://desktop.example.internal:3004/mcp answered HTTP 421 (any status = server ALIVE; 4xx expected for GET)
+PASS  Bridge IMAP                  $PROTON_MCP_HOST:1143 open
+PASS  Bridge SMTP                  $PROTON_MCP_HOST:1025 open
+PASS  MCP streamable-http          $PROTON_MCP_HOST:3004 open
+PASS  MCP HTTP liveness            http://$PROTON_MCP_HOST:3004/mcp answered HTTP 421 (any status = server ALIVE; 4xx expected for GET)
 
 CONCLUSION: PASS — Bridge IMAP/SMTP reachable and MCP server alive.
 ```
@@ -76,7 +76,7 @@ the expected healthy answer to a GET, not an error.
 
 | 1143 | 1025 | 3004 TCP | 3004 HTTP | Implicates | Next step |
 |---|---|---|---|---|---|
-| FAIL | FAIL | FAIL | FAIL | Network / desktop host down (or wrong `BRIDGE_HOST`) | `ping desktop.example.internal`; run `check_desktop_stack.sh` if SSH works |
+| FAIL | FAIL | FAIL | FAIL | Network / desktop host down (or wrong `BRIDGE_HOST`) | `ping $PROTON_MCP_HOST`; run `check_desktop_stack.sh` if SSH works |
 | FAIL | FAIL | PASS | PASS | `protonmail-bridge` container down (MCP fine but its tools will all error) | `check_desktop_stack.sh`, then proton-mcp-debugging-playbook |
 | FAIL | PASS | — | — | Bridge partially up (IMAP side wedged) — rare | proton-mcp-debugging-playbook |
 | PASS | PASS | FAIL | FAIL | `proton-email-mcp` container down or crashed | `check_desktop_stack.sh`; restart procedure lives in proton-mcp-run-and-operate |
@@ -91,8 +91,8 @@ in each copy; per-file `MATCH`/`DRIFT` verdict against the canonical Mac repo.
 | Copy | Path | Read via |
 |---|---|---|
 | Canonical | `/Users/prestonbernstein/dev/proton-email-mcp` | local `shasum -a 256` |
-| Desktop A | `/home/preston/docker/proton-email-mcp` | `ssh desktop.example.internal sudo sha256sum` |
-| Desktop B | `<docker-root>/librechat-stack/proton-email-mcp` | `ssh desktop.example.internal sudo sha256sum` |
+| Desktop A | `/home/preston/docker/proton-email-mcp` | `ssh $PROTON_MCP_SSH_HOST sudo sha256sum` |
+| Desktop B | `<docker-root>/librechat-stack/proton-email-mcp` | `ssh $PROTON_MCP_SSH_HOST sudo sha256sum` |
 
 **Run:**
 
@@ -127,11 +127,11 @@ fixes recorded in commit d34a476 — and still starts streamable-http via
 | All MATCH | No drift; any prod/dev behavior difference is env/config, not source | — |
 | DRIFT on desktop copy | Stale or hand-edited deploy artifact; the running image may embed old code | Do NOT hand-edit desktop copies; route to proton-mcp-drift-and-hardening-campaign |
 | MISSING | Copy deleted or path moved | Re-verify paths, then proton-mcp-drift-and-hardening-campaign |
-| Cannot ssh | No data — do not conclude anything about drift | Fix SSH first (`ssh desktop.example.internal true`) |
+| Cannot ssh | No data — do not conclude anything about drift | Fix SSH first (`ssh $PROTON_MCP_SSH_HOST true`) |
 
 ## 3. check_desktop_stack.sh — container and port health on the desktop
 
-**Measures:** via `ssh desktop.example.internal`: `docker ps` filtered to
+**Measures:** via `ssh $PROTON_MCP_SSH_HOST`: `docker ps` filtered to
 `protonmail-bridge` / `proton-email-mcp` / `librechat*`, and `ss -tln` for listeners on
 1143 / 1025 / 3004. LibreChat is reported as INFO only — it consumes :3004 but is not
 required for MCP health.
@@ -187,7 +187,7 @@ prints the password.
 cd /Users/prestonbernstein/dev/proton-email-mcp
 env PROTON_USERNAME=... PROTON_PASSWORD=... \
   python3 .claude/skills/proton-mcp-diagnostics-and-tooling/scripts/smoke_imap_readonly.py
-# optional: PROTON_BRIDGE_HOST (default desktop.example.internal), PROTON_BRIDGE_IMAP_PORT (1143), SMOKE_FOLDER (INBOX)
+# optional: PROTON_BRIDGE_HOST (default $PROTON_MCP_HOST), PROTON_BRIDGE_IMAP_PORT (1143), SMOKE_FOLDER (INBOX)
 ```
 
 `PROTON_PASSWORD` is the **Bridge app password** (shown in the Bridge UI), not the
@@ -196,7 +196,7 @@ Proton account password.
 **Expected healthy output** (shape; message count varies):
 
 ```
-Connecting to desktop.example.internal:1143 (plain IMAP, socket timeout 15s)...
+Connecting to $PROTON_MCP_HOST:1143 (plain IMAP, socket timeout 15s)...
 PASS: IMAP login accepted.
 PASS: selected 'INBOX' read-only; N messages present.
 CONCLUSION: PASS — Bridge IMAP end-to-end path (connect, auth, select) is healthy.

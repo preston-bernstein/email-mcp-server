@@ -12,15 +12,31 @@
 #
 # Read-only: sends no email, performs no IMAP/SMTP login, needs no credentials.
 #
+# Host config: this script never hardcodes a real LAN address. It defaults to
+# loopback (127.0.0.1) and reads your real deployment host from a repo-root
+# .env (gitignored, never committed — see .env.example) via PROTON_MCP_HOST,
+# or from an explicit env var override on the command line.
+#
 # Usage:
-#   ./check_connectivity.sh                       # defaults (desktop desktop.example.internal)
-#   BRIDGE_HOST=127.0.0.1 ./check_connectivity.sh # e.g. from the desktop itself
+#   ./check_connectivity.sh                          # loopback defaults
+#   PROTON_MCP_HOST=<your-desktop-host> ./check_connectivity.sh
+#   BRIDGE_HOST=127.0.0.1 ./check_connectivity.sh     # e.g. from the desktop itself
 #
 # Exit code: 0 if all probes pass, 1 otherwise.
 
 set -uo pipefail   # no -e: probe failures are data, not script errors
 
-BRIDGE_HOST="${BRIDGE_HOST:-desktop.example.internal}"
+# Load repo-root .env if present (gitignored; holds your real deployment values).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${PROTON_MCP_ENV_FILE:-$SCRIPT_DIR/../../../../.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
+
+BRIDGE_HOST="${BRIDGE_HOST:-${PROTON_MCP_HOST:-127.0.0.1}}"
 IMAP_PORT="${IMAP_PORT:-1143}"
 SMTP_PORT="${SMTP_PORT:-1025}"
 MCP_HOST="${MCP_HOST:-$BRIDGE_HOST}"

@@ -170,7 +170,7 @@ What the Dockerfile does (verified from `/Users/prestonbernstein/dev/proton-emai
 - Image defaults: `MCP_TRANSPORT=streamable-http`, `MCP_HOST=0.0.0.0`, `MCP_PORT=3004`, `EXPOSE 3004`
 - Credentials are NOT in the image; they must be injected at `docker run` time.
 
-Drift-prone fact: the prod image on the desktop (desktop.example.internal) was built **2026-06-20**.
+Drift-prone fact: the prod image on the desktop ($PROTON_MCP_HOST) was built **2026-06-20**.
 Any source change since then is not in prod until a rebuild + redeploy — see
 `proton-mcp-run-and-operate` for the redeploy procedure and
 `proton-mcp-drift-and-hardening-campaign` for the source-drift problem.

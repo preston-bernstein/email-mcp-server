@@ -22,7 +22,7 @@ Two production deployments of the same source (as of 2026-07-02):
 
 | Deployment | Transport | Where configured | Bridge host it uses |
 |---|---|---|---|
-| Mac / Claude Code | stdio (server spawned as a subprocess, speaks MCP over stdin/stdout) | `~/.claude.json` → `mcpServers["proton-mail"]` | `desktop.example.internal` (the desktop, over LAN) |
+| Mac / Claude Code | stdio (server spawned as a subprocess, speaks MCP over stdin/stdout) | `~/.claude.json` → `mcpServers["proton-mail"]` | `$PROTON_MCP_HOST` (the desktop, over LAN) |
 | Desktop Docker container `proton-email-mcp` | streamable-http on `0.0.0.0:3004` (consumed by LibreChat) | container env; `--network host` | `localhost` |
 
 Proton Bridge itself runs as desktop container `protonmail-bridge`
@@ -35,7 +35,7 @@ address. They live in `~/.claude.json` (Mac) and the container env (desktop). Re
 **Command conventions in this playbook:**
 
 - Plain commands: run on the Mac, safe and read-only.
-- Commands marked **[desktop]**: run from the desktop maintenance context via `ssh desktop.example.internal`.
+- Commands marked **[desktop]**: run from the desktop maintenance context via `ssh $PROTON_MCP_SSH_HOST`.
   Do not run them from an agent session that is barred from SSH.
 - **Never call `send_email` while debugging.** Read-path tools (`list_folders`,
   `get_email_stats`, `read_recent_emails` with small count) are the safe probes.
@@ -95,7 +95,7 @@ Discriminating experiment:
   - **`search_emails` also hangs past 20 s** → connection is accepted but Bridge is wedged
     pre-login, or the hang is in your MCP client, not the server. Check Bridge:
 
-  **[desktop]** (run from desktop maintenance context via `ssh desktop.example.internal`):
+  **[desktop]** (run from desktop maintenance context via `ssh $PROTON_MCP_SSH_HOST`):
 
   ```
   docker ps
@@ -151,7 +151,7 @@ Ranked causes:
 
 Discriminating experiment:
 
-**[desktop]** (via `ssh desktop.example.internal`):
+**[desktop]** (via `ssh $PROTON_MCP_SSH_HOST`):
 
 ```
 docker logs --tail 50 protonmail-bridge
@@ -169,7 +169,7 @@ Ranked causes:
 
 1. **`protonmail-bridge` container down** (it publishes `1025:25` and `1143:143`).
 2. **Wrong `PROTON_BRIDGE_HOST`.** Known trap: `.env.example` says `127.0.0.1`, but the real Mac
-   stdio deployment must use `desktop.example.internal` (the desktop) — the example is a template, not a record
+   stdio deployment must use `$PROTON_MCP_HOST` (the desktop) — the example is a template, not a record
    of deployment (as of 2026-07-02). `127.0.0.1` on the Mac means "connect to the Mac itself",
    where no Bridge runs → instant refusal.
 3. Port published differently after a compose change.
@@ -177,8 +177,8 @@ Ranked causes:
 Discriminating experiment (Mac; UNVERIFIED — standard `nc` syntax, not executed during authoring):
 
 ```
-nc -vz desktop.example.internal 1143
-nc -vz desktop.example.internal 1025
+nc -vz $PROTON_MCP_HOST 1143
+nc -vz $PROTON_MCP_HOST 1025
 ```
 
 - **Both succeed** → Bridge is reachable; your failing process has the wrong
@@ -248,7 +248,7 @@ Ranked causes:
    alongside `mcpServers.proton-email: url http://localhost:3004/mcp, type streamable-http`.
 3. **LibreChat not restarted after a `librechat.yaml` edit** — yaml changes need a restart.
 
-Discriminating experiment — **[desktop]** (via `ssh desktop.example.internal`):
+Discriminating experiment — **[desktop]** (via `ssh $PROTON_MCP_SSH_HOST`):
 
 ```
 docker ps
@@ -345,7 +345,7 @@ the verified facts pack of 2026-07-02.
 | FastMCP constructor breakage | Extra constructor arg (prompt parameter) to `FastMCP(...)` broke startup on this mcp version | Line 25 comment `NO PROMPT PARAMETER!` | Fixed; guard by convention |
 | Vestigial dependencies | `secure-smtplib`, `httpx`, `python-dotenv` listed in `requirements.txt` but never imported (server uses stdlib `smtplib`; `.env` never loaded) | Verified imports in `proton_email_server.py`, 2026-07-02 | Open; removal is a Docker-build-affecting change → `proton-mcp-change-control` |
 | Stats "7 days" mislabel | `SINCE <today>` counts today only; label says 7 days | Line 307 vs line 315 | **Open bug** (as of 2026-07-02) |
-| `.env.example` host divergence | Template says `PROTON_BRIDGE_HOST=127.0.0.1`; real Mac deployment uses `desktop.example.internal` | `.env.example` line 3 vs `~/.claude.json` deployment | Standing trap; template ≠ deployment record |
+| `.env.example` host divergence | Template says `PROTON_BRIDGE_HOST=127.0.0.1`; real Mac deployment uses `$PROTON_MCP_HOST` | `.env.example` line 3 vs `~/.claude.json` deployment | Standing trap; template ≠ deployment record |
 | Bcc "leak" false alarm | `msg['Bcc']` is set (line 223) but `smtplib.send_message` (line 244) does **not** transmit Bcc headers | Python stdlib documented behavior, verified against docs 2026-07-02 | **Not a bug — do NOT "fix" it.** Rewriting send to transmit raw headers would *create* the leak |
 
 **The hang saga in full (incident 1):** the fix landed as three parts, all in `search_emails`
@@ -415,4 +415,4 @@ Re-verify before trusting volatile claims:
 - Mac MCP registration (keys only, never values): `jq '.mcpServers["proton-mail"] | {command, args, env_keys: (.env | keys)}' ~/.claude.json`
 - Vestigial deps still unused: `grep -nE 'import (httpx|dotenv)|secure' /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py` (expect no output)
 - Stats bug still open: `sed -n '307p' /Users/prestonbernstein/dev/proton-email-mcp/proton_email_server.py` (bug present if it says `SINCE ... datetime.now()`)
-- Desktop state **[desktop]** via `ssh desktop.example.internal`: `docker ps && ss -tln | grep -E "1143|1025|3004"`
+- Desktop state **[desktop]** via `ssh $PROTON_MCP_SSH_HOST`: `docker ps && ss -tln | grep -E "1143|1025|3004"`
