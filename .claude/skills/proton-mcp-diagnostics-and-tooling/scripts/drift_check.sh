@@ -2,25 +2,42 @@
 # drift_check.sh — detect source drift across the three copies of proton-email-mcp.
 #
 # Compares sha256 of proton_email_server.py, Dockerfile, requirements.txt across:
-#   1. Mac git repo (canonical):  /Users/prestonbernstein/dev/proton-email-mcp
-#   2. Desktop copy A:            /home/preston/docker/proton-email-mcp
-#   3. Desktop copy B:            <docker-root>/librechat-stack/proton-email-mcp
+#   1. Mac git repo (canonical):  $MAC_REPO
+#   2. Desktop copy A:            $DESKTOP_A
+#   3. Desktop copy B:            $DESKTOP_B
 #
-# Desktop hashes are read over `ssh desktop.example.internal sudo sha256sum` (read-only).
+# Desktop hashes are read over `ssh $PROTON_MCP_SSH_HOST sudo sha256sum` (read-only).
 # Prints per-file MATCH/DRIFT verdicts against the Mac canonical copy.
 #
+# Host config: this script never hardcodes a real SSH alias/host. It defaults
+# to loopback (127.0.0.1, which will simply fail to ssh — a safe no-op) and
+# reads your real deployment target from a repo-root .env (gitignored, never
+# committed — see .env.example) via PROTON_MCP_SSH_HOST, or an explicit
+# override on the command line.
+#
 # Usage:
-#   ./drift_check.sh                 # defaults above
-#   SSH_TARGET=desktop.example.internal ./drift_check.sh
+#   ./drift_check.sh                                    # defaults above
+#   PROTON_MCP_SSH_HOST=<your-desktop-ssh-alias> ./drift_check.sh
+#   SSH_TARGET=<your-desktop-ssh-alias> ./drift_check.sh
 #
 # Exit code: 0 = all files match everywhere, 1 = drift or missing files.
 
 set -uo pipefail
 
+# Load repo-root .env if present (gitignored; holds your real deployment values).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${PROTON_MCP_ENV_FILE:-$SCRIPT_DIR/../../../../.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
+
 MAC_REPO="${MAC_REPO:-/Users/prestonbernstein/dev/proton-email-mcp}"
 DESKTOP_A="${DESKTOP_A:-/home/preston/docker/proton-email-mcp}"
 DESKTOP_B="${DESKTOP_B:-<docker-root>/librechat-stack/proton-email-mcp}"
-SSH_TARGET="${SSH_TARGET:-desktop.example.internal}"
+SSH_TARGET="${SSH_TARGET:-${PROTON_MCP_SSH_HOST:-127.0.0.1}}"
 FILES=(proton_email_server.py Dockerfile requirements.txt)
 
 overall=0
@@ -47,7 +64,8 @@ echo "Desktop A: $DESKTOP_A  Desktop B: $DESKTOP_B  (via ssh $SSH_TARGET)"
 echo
 
 if ! ssh -o ConnectTimeout=10 "$SSH_TARGET" true 2>/dev/null; then
-  echo "FAIL: cannot ssh to '$SSH_TARGET' — check SSH config/key. No drift data gathered."
+  echo "FAIL: cannot ssh to '$SSH_TARGET' — check SSH config/key, and set PROTON_MCP_SSH_HOST"
+  echo "  in a repo-root .env (see .env.example). No drift data gathered."
   exit 1
 fi
 

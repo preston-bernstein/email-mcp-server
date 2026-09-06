@@ -217,7 +217,12 @@ def _read_recent_emails_sync(count: str, folder: str) -> str:
 
 @mcp.tool()
 async def read_recent_emails(count: str = "10", folder: str = "INBOX") -> str:
-    """Read recent emails from specified folder with optional count limit."""
+    """Read the most recent emails from one IMAP folder and return them as a formatted text block (not JSON), newest first, each entry showing From, Subject, Date, and a body preview truncated to 300 characters. Returns a plain error string, not an exception, if Proton credentials are missing, the folder does not exist, or the connection times out; a message that cannot be parsed is reported inline as a warning instead of failing the whole call. `count` is capped at 50 regardless of what is requested, so it never returns more than that even for a folder with thousands of messages. Use search_emails instead when you need to filter by content rather than just take the newest N messages.
+
+    Args:
+        count: Number of most recent emails to return, as a numeric string (e.g. "10"). Defaults to "10". Silently capped at 50 even if a higher value is passed. Must parse as an integer; a non-numeric value returns an error string instead of raising.
+        folder: IMAP folder name to read from (e.g. "INBOX", "Sent"). Defaults to "INBOX". If the folder does not exist or can't be selected, returns an error string instead of raising.
+    """
     return await asyncio.to_thread(_read_recent_emails_sync, count, folder)
 
 
@@ -280,7 +285,13 @@ def _search_emails_sync(query: str, folder: str, max_results: str) -> str:
 
 @mcp.tool()
 async def search_emails(query: str = "", folder: str = "INBOX", max_results: str = "20") -> str:
-    """Search emails in specified folder using IMAP search criteria."""
+    """Search one IMAP folder for a text query and return matching emails as a formatted text block (not JSON), newest match first, each entry showing only From, Subject, and Date; the message body is not included in search results. The query is sanitized to letters, digits, spaces, @, period, and hyphen before searching, other characters are stripped, and a query with nothing left after stripping returns an error string. It first tries a full TEXT search across subject, headers, and body, and silently falls back to a SUBJECT-only search if the Bridge rejects the TEXT search, so a body-only match can be missed with no indication of which search mode actually ran. `max_results` is capped at 50 regardless of what is requested. Use read_recent_emails instead when you just want the newest messages with a full body preview, not a filtered search.
+
+    Args:
+        query: Search text to match against email subject, headers, and (when supported) body. Required; an empty or whitespace-only string returns an error. Characters other than letters, digits, spaces, @, period, and hyphen are stripped before the IMAP search runs.
+        folder: IMAP folder to search (e.g. "INBOX"). Defaults to "INBOX".
+        max_results: Maximum number of matches to return, as a numeric string. Defaults to "20". Silently capped at 50.
+    """
     return await asyncio.to_thread(_search_emails_sync, query, folder, max_results)
 
 
@@ -333,7 +344,16 @@ def _send_email_sync(to_email: str, subject: str, body: str, cc: str, bcc: str, 
 
 @mcp.tool()
 async def send_email(to_email: str = "", subject: str = "", body: str = "", cc: str = "", bcc: str = "", from_email: str = "") -> str:
-    """Send an email via Proton Bridge SMTP. Optionally send as an alias address you've added to your Proton account (from_email)."""
+    """Send a single email through Proton Bridge's SMTP relay and return a plain text status string, not a structured result: either a success message or a "Error: ..." message describing what went wrong. to_email, subject, and body are required; an empty or whitespace-only value in any of them returns an error without attempting to send. bcc recipients receive the message through the SMTP envelope but are never added as a visible header, so other recipients cannot see them; cc recipients are visible to everyone. Optionally set from_email to send as a verified alias on the Proton account instead of the default account address. TLS certificate verification is disabled for the connection to Bridge, which is safe only because this server refuses to run against any SMTP host outside loopback or a private network; it does not attach files or support HTML bodies.
+
+    Args:
+        to_email: Primary recipient. Required; empty/whitespace-only errors instead of sending.
+        subject: Email subject. Required; empty/whitespace-only errors instead of sending.
+        body: Plain-text body. Required; empty/whitespace-only errors instead of sending. text/plain only, no HTML or attachments.
+        cc: Comma-separated CC addresses. Optional, default none. Visible to every recipient.
+        bcc: Comma-separated BCC addresses. Optional, default none. Never added as a visible header.
+        from_email: Alias address to send as. Optional; defaults to the account's own address.
+    """
     return await asyncio.to_thread(_send_email_sync, to_email, subject, body, cc, bcc, from_email)
 
 
@@ -370,7 +390,7 @@ def _list_folders_sync() -> str:
 
 @mcp.tool()
 async def list_folders() -> str:
-    """List all available email folders in the mailbox."""
+    """List every IMAP folder name in the mailbox as a plain text list (not JSON), one folder per line. It takes no parameters and always returns the full folder list; it cannot filter, search within a folder, or return folder-level stats like message counts (use get_email_stats for that, one folder at a time). A folder line the IMAP response can't parse is silently dropped from the output rather than shown as an error, so the returned count may undercount the true number of folders. Returns a plain error string, not an exception, if Proton credentials are missing or the connection fails."""
     return await asyncio.to_thread(_list_folders_sync)
 
 
@@ -412,7 +432,11 @@ def _get_email_stats_sync(folder: str) -> str:
 
 @mcp.tool()
 async def get_email_stats(folder: str = "INBOX") -> str:
-    """Get statistics about emails in the specified folder."""
+    """Return message counts for one IMAP folder as a plain text block (not JSON): total emails, unread emails, emails from the last 7 days, and read emails (total minus unread). The 7-day window for "recent" is fixed and cannot be changed by a parameter. It only covers the one folder passed in; call it once per folder to compare folders, since there is no way to get stats across the whole mailbox in one call. Returns a plain error string, not an exception, if Proton credentials are missing, the folder doesn't exist, or the connection fails.
+
+    Args:
+        folder: IMAP folder to compute statistics for (e.g. "INBOX"). Defaults to "INBOX". If the folder doesn't exist or can't be selected, returns an error string instead of raising.
+    """
     return await asyncio.to_thread(_get_email_stats_sync, folder)
 
 # === SERVER STARTUP ===
