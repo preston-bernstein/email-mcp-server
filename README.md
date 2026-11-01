@@ -1,8 +1,8 @@
-# proton-email-mcp
+# email-mcp-server
 
 MCP server exposing Proton Mail (via Proton Bridge) as tools for an LLM client. Speaks IMAP/SMTP to a locally running Proton Bridge — no direct Proton API calls.
 
-[![CI](https://github.com/preston-bernstein/proton-email-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/preston-bernstein/proton-email-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/preston-bernstein/email-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/preston-bernstein/email-mcp-server/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Tools
