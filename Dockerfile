@@ -1,3 +1,5 @@
+# docker-allow: root container user not yet audited for file ownership and ports; add USER after testing
+# docker-allow: unpinned image has no pinnable upstream tag or digest (local build or moving tag)
 FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
