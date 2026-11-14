@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   ci:
-    uses: preston-bernstein/ci-workflows/.github/workflows/python.yml@v1
+    uses: preston-bernstein/ci-workflows/.github/workflows/python.yml@980585f4e9c3c1ef982cb934e153f925121fe0c0 # v1
     with:
       python-versions: '["3.12"]'
       install: pip install -r requirements.txt pytest pytest-asyncio
@@ -24,4 +24,4 @@ jobs:
       test: pytest
 
   workflows:
-    uses: preston-bernstein/ci-workflows/.github/workflows/actions-lint.yml@v1
+    uses: preston-bernstein/ci-workflows/.github/workflows/actions-lint.yml@980585f4e9c3c1ef982cb934e153f925121fe0c0 # v1
