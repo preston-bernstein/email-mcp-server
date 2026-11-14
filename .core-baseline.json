@@ -1,0 +1,53 @@
+{
+ "_reason": "Existing over-limit functions accepted on 2026-11-13; new code must stay within the limits. Fix them when touched.",
+ "functions": {
+  "proton_email_server.py::_format_message": {
+   "nd": 0,
+   "param": 5,
+   "token": 111,
+   "ccn": 3,
+   "length": 15,
+   "nloc": 13
+  },
+  "proton_email_server.py::_search_emails_sync": {
+   "nd": 0,
+   "param": 3,
+   "token": 332,
+   "ccn": 14,
+   "length": 55,
+   "nloc": 42
+  },
+  "proton_email_server.py::_send_email_sync": {
+   "nd": 0,
+   "param": 6,
+   "token": 255,
+   "ccn": 8,
+   "length": 45,
+   "nloc": 28
+  },
+  "proton_email_server.py::extract_email_body": {
+   "nd": 0,
+   "param": 1,
+   "token": 140,
+   "ccn": 11,
+   "length": 31,
+   "nloc": 21
+  },
+  "proton_email_server.py::send_email": {
+   "nd": 0,
+   "param": 6,
+   "token": 62,
+   "ccn": 1,
+   "length": 12,
+   "nloc": 2
+  },
+  "tests/test_tool_descriptions.py::test_every_tool_description_meets_minimum_bar": {
+   "nd": 0,
+   "param": 0,
+   "token": 169,
+   "ccn": 11,
+   "length": 34,
+   "nloc": 29
+  }
+ }
+}
