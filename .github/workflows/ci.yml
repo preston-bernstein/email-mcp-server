@@ -22,6 +22,3 @@ jobs:
       install: pip install -r requirements.txt pytest pytest-asyncio
       lint: ''
       test: pytest
-
-  workflows:
-    uses: preston-bernstein/ci-workflows/.github/workflows/actions-lint.yml@980585f4e9c3c1ef982cb934e153f925121fe0c0 # v1

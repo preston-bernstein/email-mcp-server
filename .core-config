@@ -1,0 +1,2 @@
+# Pack gate scripts in scripts/ are vendored unchanged from the stack packs. They are not this repo's code.
+CORE_EXCLUDE=*/scripts/*  # vendored pack scripts, copied unchanged
