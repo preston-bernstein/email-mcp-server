@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# One hook, same gates as CI. Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+bash "$root/scripts/core-validate.sh"
+bash "$root/scripts/gha-validate.sh"
+bash "$root/scripts/docker-validate.sh"
+python3 "$root/scripts/logging-check.py" "$root"
+bash "$root/scripts/writing-validate.sh"

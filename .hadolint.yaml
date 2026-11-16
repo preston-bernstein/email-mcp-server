@@ -1,0 +1,9 @@
+# Save as .hadolint.yaml. Pack: docker, rule docker-hadolint. Pin the hadolint version in CI (v2.15.1 was the latest
+# line seen). failure-threshold sets the exit code without hiding findings. No ignored rules on purpose: waive one
+# finding with `# hadolint ignore=DLxxxx` on the line before it, with a reason.
+failure-threshold: warning
+ignored: []
+trustedRegistries:
+  - docker.io
+  - ghcr.io
+  - quay.io

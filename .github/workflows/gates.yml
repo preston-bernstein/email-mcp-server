@@ -1,0 +1,89 @@
+name: Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      HADOLINT_VERSION: 2.15.1
+      HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+      TRIVY_VERSION: 0.76.2
+      TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+      VALE_VERSION: 3.27.0
+      VALE_SHA256: c80d62f6bce87b81843ac5b512a26e63213927b957adba0a64fc594570da2000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Install lizard and zizmor (hash-locked)
+        run: python -m pip install --require-hashes --no-deps -r ci/requirements.txt
+
+      - name: Install jscpd (locked by package-lock.json)
+        run: |
+          npm ci --ignore-scripts --prefix ci
+          echo "$GITHUB_WORKSPACE/ci/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Install actionlint, hadolint, trivy and vale (checksum-verified)
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"
+          mkdir -p "$bin" "$RUNNER_TEMP/dl"
+          cd "$RUNNER_TEMP/dl"
+          gh_dl() { curl -fsSL --retry 3 -o "$2" "https://github.com/$1"; }
+          verify() { echo "$1  $2" | sha256sum -c -; }
+          gh_dl "rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" actionlint.tgz
+          verify "$ACTIONLINT_SHA256" actionlint.tgz
+          tar -xzf actionlint.tgz -C "$bin" actionlint
+          gh_dl "hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64" hadolint
+          verify "$HADOLINT_SHA256" hadolint
+          install -m 755 hadolint "$bin/hadolint"
+          gh_dl "aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy.tgz
+          verify "$TRIVY_SHA256" trivy.tgz
+          tar -xzf trivy.tgz -C "$bin" trivy
+          gh_dl "vale-cli/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" vale.tgz
+          verify "$VALE_SHA256" vale.tgz
+          tar -xzf vale.tgz -C "$bin" vale
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Core gate
+        run: bash scripts/core-validate.sh
+
+      - name: GitHub Actions gate
+        run: bash scripts/gha-validate.sh
+
+      - name: Docker gate
+        run: bash scripts/docker-validate.sh
+
+      - name: Logging gate
+        run: python3 scripts/logging-check.py .
+
+      - name: Writing gate
+        env:
+          WRITING_BASE_BRANCH: main
+        run: bash scripts/writing-validate.sh
