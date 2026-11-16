@@ -3,6 +3,6 @@
   "private": true,
   "description": "Pinned tool set for the CI gates. Not part of the server.",
   "devDependencies": {
-    "jscpd": "5.4.2"
+    "jscpd": "5.4.3"
   }
 }
