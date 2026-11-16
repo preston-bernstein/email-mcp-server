@@ -1,0 +1,8 @@
+{
+  "name": "gate-tools",
+  "private": true,
+  "description": "Pinned tool set for the CI gates. Not part of the server.",
+  "devDependencies": {
+    "jscpd": "5.4.2"
+  }
+}
