@@ -1,0 +1,3 @@
+# Existing trivy findings, accepted in the pack-compliance pass. Address each when its container is next tested
+# (DS-0002: add a non-root USER after checking file ownership and ports).
+DS-0002
