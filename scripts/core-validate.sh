@@ -15,7 +15,10 @@ ROOT="${1:-.}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-fail() { echo "core-validate: $*" >&2; exit "${2:-1}"; }
+fail() {
+  echo "core-validate: $*" >&2
+  exit "${2:-1}"
+}
 need() { command -v "$1" >/dev/null 2>&1 || fail "missing tool: $1 (the gate never skips a step)" 127; }
 
 need python3
@@ -25,14 +28,15 @@ need jscpd
 # .core-config: CORE_* overrides, one per line, each with a reason: CORE_DUP_THRESHOLD=9  # why
 if [ -f .core-config ]; then
   while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in ""|"#"*) continue ;; esac
+    case "$line" in "" | "#"*) continue ;; esac
     if [[ "$line" =~ ^(CORE_[A-Z_]+)=([A-Za-z0-9_.*/-]+)[[:space:]]+#[[:space:]]*[^[:space:]].*$ ]]; then
-      cfg_name="${BASH_REMATCH[1]}"; cfg_val="${BASH_REMATCH[2]}"
-      [ -n "${!cfg_name+x}" ] || export "$cfg_name=$cfg_val"      # the environment wins over the file
+      cfg_name="${BASH_REMATCH[1]}"
+      cfg_val="${BASH_REMATCH[2]}"
+      [ -n "${!cfg_name+x}" ] || export "$cfg_name=$cfg_val" # the environment wins over the file
     else
       fail ".core-config: each line must be CORE_NAME=value  # reason (got: $line)" 2
     fi
-  done < .core-config
+  done <.core-config
 fi
 
 CCN="${CORE_CCN:-10}"
@@ -45,7 +49,7 @@ DUP_TOKENS="${CORE_DUP_MIN_TOKENS:-50}"
 DUP_LINES="${CORE_DUP_MIN_LINES:-5}"
 
 EXCLUDES=(-x "*/node_modules/*" -x "*/vendor/*" -x "*/dist/*" -x "*/build/*" -x "*/target/*" -x "*/.venv/*" -x "*/venv/*"
-          -x "*.min.js" -x "*/generated/*" -x "*/__generated__/*" -x "*.lock")
+  -x "*.min.js" -x "*/generated/*" -x "*/__generated__/*" -x "*.lock")
 JSCPD_IGNORE="**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/target/**,**/.venv/**,**/venv/**,**/*.min.js,**/generated/**,**/*.lock"
 for glob in ${CORE_EXCLUDE:-}; do
   EXCLUDES+=(-x "$glob")
