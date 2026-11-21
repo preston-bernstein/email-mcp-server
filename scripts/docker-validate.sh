@@ -13,16 +13,21 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${1:-.}"
 cd "$ROOT"
 
-fail() { echo "docker-validate: $*" >&2; exit "${2:-1}"; }
+fail() {
+  echo "docker-validate: $*" >&2
+  exit "${2:-1}"
+}
 need() { command -v "$1" >/dev/null 2>&1 || fail "missing tool: $1 (the gate never skips a step)" 127; }
 
-prune=( \( -name node_modules -o -name vendor -o -name '.?*' \) -prune -o )
+prune=(\( -name node_modules -o -name vendor -o -name '.?*' \) -prune -o)
 dockerfiles=()
 while IFS= read -r f; do dockerfiles+=("$f"); done < <(
-  find . -mindepth 1 "${prune[@]}" -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.Dockerfile' -o -name '*.dockerfile' \) -print | sort)
+  find . -mindepth 1 "${prune[@]}" -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.Dockerfile' -o -name '*.dockerfile' \) -print | sort
+)
 composes=()
 while IFS= read -r f; do composes+=("$f"); done < <(
-  find . -mindepth 1 "${prune[@]}" -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name 'compose*.yml' -o -name 'compose*.yaml' \) -print | sort)
+  find . -mindepth 1 "${prune[@]}" -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name 'compose*.yml' -o -name 'compose*.yaml' \) -print | sort
+)
 
 if [ "${#dockerfiles[@]}" -eq 0 ] && [ "${#composes[@]}" -eq 0 ]; then
   echo "docker-validate: no Dockerfiles or Compose files, nothing to check"

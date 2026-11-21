@@ -32,7 +32,10 @@ SKIP='(^|/)(\.vale|node_modules|vendor|dist|build|\.git)/|(^|/)(CHANGELOG|LICENS
 
 all_files() {
   if git rev-parse --git-dir >/dev/null 2>&1; then
-    { git ls-files; git ls-files --others --exclude-standard; } | sort -u
+    {
+      git ls-files
+      git ls-files --others --exclude-standard
+    } | sort -u
   else
     find . -type f -not -path './.git/*' | sed 's|^\./||'
   fi
@@ -46,7 +49,7 @@ changed_files() {
 }
 
 if [ "$#" -gt 0 ]; then
-  source_list="$(printf '%s\n' "$@")"          # explicit paths still pass the filters below
+  source_list="$(printf '%s\n' "$@")" # explicit paths still pass the filters below
 elif [ "${WRITING_ALL:-0}" = 1 ] || ! git rev-parse --git-dir >/dev/null 2>&1; then
   source_list="$(all_files)"
 else
@@ -54,7 +57,11 @@ else
 fi
 allow=()
 if [ -f .writing-allow ]; then
-  while IFS= read -r line; do line="${line%%#*}"; line="${line//[[:space:]]/}"; [ -n "$line" ] && allow+=("$line"); done < .writing-allow
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    line="${line//[[:space:]]/}"
+    [ -n "$line" ] && allow+=("$line")
+  done <.writing-allow
 fi
 files=()
 while IFS= read -r f; do
@@ -62,9 +69,13 @@ while IFS= read -r f; do
   printf '%s' "$f" | grep -Eq "$EXT" || continue
   printf '%s' "$f" | grep -Eq "$SKIP" && continue
   skip=0
-  for pat in "${allow[@]+"${allow[@]}"}"; do case "$f" in $pat) skip=1 ;; esac; done
+  # shellcheck disable=SC2254  # .writing-allow entries are globs on purpose
+  for pat in "${allow[@]+"${allow[@]}"}"; do case "$f" in $pat) skip=1 ;; esac done
   [ "$skip" = 1 ] || files+=("$f")
 done <<<"$source_list"
 
-if [ "${#files[@]}" -eq 0 ]; then echo "writing-validate: no prose or source files to check"; exit 0; fi
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "writing-validate: no prose or source files to check"
+  exit 0
+fi
 "$VALE" "${CONFIG[@]+"${CONFIG[@]}"}" --minAlertLevel=warning --no-wrap "${files[@]}"

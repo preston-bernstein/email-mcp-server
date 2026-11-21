@@ -12,7 +12,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${1:-.}"
 cd "$ROOT"
 
-fail() { echo "gha-validate: $*" >&2; exit "${2:-1}"; }
+fail() {
+  echo "gha-validate: $*" >&2
+  exit "${2:-1}"
+}
 need() { command -v "$1" >/dev/null 2>&1 || fail "missing tool: $1 (the gate never skips a step)" 127; }
 
 if [ ! -d .github/workflows ] || [ -z "$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \))" ]; then
