@@ -7,6 +7,7 @@
 # Only error rules fail the gate. Warnings print and pass: promote a rule to error when you would reject a PR over it.
 # A path pattern in `.writing-allow` (one per line, `# reason` after it) is skipped, and so is anything in vendor or build paths,
 # whether the path came from git or from the command line.
+# sh-allow: nostrict the git probes (merge-base, diff on a repo with no commits) may fail by design and fall back
 set -u
 VALE="${WRITING_VALE:-vale}"
 if ! command -v "$VALE" >/dev/null 2>&1; then
