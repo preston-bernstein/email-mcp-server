@@ -3,24 +3,32 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
+    commit-message:
+      prefix: "chore(deps)"
     directory: /
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
   - package-ecosystem: docker
+    commit-message:
+      prefix: "chore(deps)"
     directory: /
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
   - package-ecosystem: pip
+    commit-message:
+      prefix: "chore(deps)"
     directory: /ci
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
   - package-ecosystem: npm
+    commit-message:
+      prefix: "chore(deps)"
     directory: /ci
     schedule:
       interval: weekly
